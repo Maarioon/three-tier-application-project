@@ -4,12 +4,11 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -22,12 +21,52 @@ jobs:
           node-version: '18'
 
       - name: Install dependencies
-        run: npm install  # Install all dependencies
+        run: |
+          mkdir -p .github/workflows
+          touch .github/workflows/generate-release-note.js
+          npm init -y
+          npm install @octokit/rest
 
       - name: Generate Release Notes
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
+          # Create a simple release notes generation script if it doesn't exist
+          cat > .github/workflows/generate-release-note.js << 'EOL'
+          import { Octokit } from '@octokit/rest';
+
+          async function generateReleaseNotes() {
+            const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+            
+            try {
+              const { data: releases } = await octokit.repos.listReleases({
+                owner: process.env.GITHUB_REPOSITORY.split('/')[0],
+                repo: process.env.GITHUB_REPOSITORY.split('/')[1]
+              });
+
+              console.log('# Release Notes');
+              console.log(`Generated on: ${new Date().toISOString()}`);
+              console.log('');
+
+              if (releases.length > 0) {
+                releases.slice(0, 5).forEach(release => {
+                  console.log(`## ${release.tag_name}`);
+                  console.log(`Created at: ${release.created_at}`);
+                  console.log(release.body || 'No description');
+                  console.log('');
+                });
+              } else {
+                console.log('No previous releases found.');
+              }
+            } catch (error) {
+              console.error('Error generating release notes:', error);
+              process.exit(1);
+            }
+          }
+
+          generateReleaseNotes();
+          EOL
+
           node --experimental-modules .github/workflows/generate-release-note.js | tee release-notes.md
 
       - name: Upload Release Notes as Artifact
@@ -49,7 +88,6 @@ jobs:
             APP_DIR="/home/${{ secrets.EC2_USERNAME }}/myapp"
             mkdir -p $APP_DIR
             cd $APP_DIR
-
             if [ -d "$APP_DIR/.git" ]; then
               echo "Updating existing repository..."
               git pull origin main
@@ -57,7 +95,6 @@ jobs:
               echo "Cloning repository..."
               git clone https://github.com/${{ github.repository }}.git .
             fi
-
             echo "Starting application with Docker Compose..."
             docker compose down || true
             docker compose up -d --build
@@ -68,6 +105,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@master
@@ -76,6 +115,6 @@ jobs:
         with:
           projectBaseDir: .
           args: >
-            #-Dsonar.projectKey=three-tier-app
+            -Dsonar.projectKey=three-tier-app
             -Dsonar.organization=three-tier-application-project
-            -Dsonar.host.url=https://sonarcloud.io/project/overview?id=Maarioon_three-tier-application-project
+            -Dsonar.host.url=https://sonarcloud.io
