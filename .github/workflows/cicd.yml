@@ -75,15 +75,17 @@ jobs:
           name: release-notes
           path: release-notes.md
 
-      - name: Set up SSH key
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          EC2_HOST: ${{ secrets.EC2_HOST }}
+      - name: Debug SSH Setup
         run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
+         set -x  # Enable debug mode
+         mkdir -p ~/.ssh
+         echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
+         ls -lah ~/.ssh  # Check if id_rsa was created
+         cat ~/.ssh/id_rsa  # Verify key (remove this after debugging)
+         chmod 600 ~/.ssh/id_rsa
+         ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+         cat ~/.ssh/known_hosts  # Verify known_hosts
+
       
       - name: Deploy to EC2
         run: |
