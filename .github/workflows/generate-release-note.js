@@ -24,11 +24,13 @@ async function generateReleaseNotes() {
       console.log('No previous releases found.');
     }
   } catch (error) {
-    // Enhanced error logging
-    console.error('Error generating release notes:', error.message);
-    console.error('Error stack trace:', error.stack);
+    console.error('Error generating release notes:', error);
     process.exit(1);
   }
 }
 
-generateReleaseNotes();
+function retry(fn, retries = 3) {
+  return fn().catch(err => retries > 1 ? retry(fn, retries - 1) : Promise.reject(err));
+}
+
+retry(generateReleaseNotes);
