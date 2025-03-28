@@ -20,21 +20,56 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Debug SSH Connection
+      - name: Comprehensive Network Diagnostics
         run: |
-          # Explicit DNS configuration
+          # Network and DNS debugging
+          echo "Network Interfaces:"
+          ip addr
+          
+          echo "DNS Configuration:"
+          cat /etc/resolv.conf
+          
+          echo "Adding Google and Cloudflare DNS:"
           sudo bash -c 'echo "nameserver 8.8.8.8" > /etc/resolv.conf'
           sudo bash -c 'echo "nameserver 1.1.1.1" >> /etc/resolv.conf'
+          
+          echo "DNS Resolution Tests:"
+          dig github.com
+          ping -c 4 github.com
+          ping -c 4 ${{ secrets.EC2_HOST }}
 
-          # SSH Connection Debugging
+      - name: Prepare SSH Connection
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+        run: |
+          # Create SSH directory with strict permissions
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 700 ~/.ssh
+
+          # Write SSH private key securely
+          echo "$EC2_SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-          # Verbose SSH debugging
-          ssh -vvv -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} 'hostname && echo "Connection successful"'
+          # Create SSH config for robust connection
+          cat << EOF > ~/.ssh/config
+          Host ec2-deployment
+            HostName $EC2_HOST
+            User $EC2_USERNAME
+            IdentityFile ~/.ssh/id_rsa
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+          EOF
 
-      - name: Install dependencies
+          # Add host to known hosts
+          ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+          # Test SSH connection with verbose output
+          ssh -vvv -F ~/.ssh/config ec2-deployment 'echo "SSH Connection Test Successful"'
+
+      - name: Install Dependencies
         run: |
           mkdir -p .github/workflows
           touch .github/workflows/generate-release-note.js
@@ -47,7 +82,6 @@ jobs:
         run: |
           cat > .github/workflows/generate-release-note.js << 'EOL'
           import { Octokit } from '@octokit/rest';
-
           async function generateReleaseNotes() {
             const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
             
@@ -56,11 +90,9 @@ jobs:
                 owner: process.env.GITHUB_REPOSITORY.split('/')[0],
                 repo: process.env.GITHUB_REPOSITORY.split('/')[1]
               });
-
               console.log('# Release Notes');
               console.log(`Generated on: ${new Date().toISOString()}`);
               console.log('');
-
               if (releases.length > 0) {
                 releases.slice(0, 5).forEach(release => {
                   console.log(`## ${release.tag_name}`);
@@ -76,14 +108,11 @@ jobs:
               process.exit(1);
             }
           }
-
           function retry(fn, retries = 3) {
             return fn().catch(err => retries > 1 ? retry(fn, retries - 1) : Promise.reject(err));
           }
-
           retry(generateReleaseNotes);
           EOL
-
           node --experimental-modules .github/workflows/generate-release-note.js | tee release-notes.md
 
       - name: Upload Release Notes as Artifact
@@ -92,37 +121,45 @@ jobs:
           name: release-notes
           path: release-notes.md
 
-      - name: Check DNS Resolution
-        run: |
-         dig github.com
-         cat /etc/resolv.conf
-
-
-      - name: Debug SSH Setup
-        run: |
-          set -x  # Enable debug mode
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
-          ls -lah ~/.ssh  # Check if id_rsa was created
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-
       - name: Deploy to EC2
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
+          # Deployment with advanced error handling
+          ssh -F ~/.ssh/config ec2-deployment << 'EOF'
+            # Create application directory
             APP_DIR="/home/${{ secrets.EC2_USERNAME }}/myapp"
             mkdir -p $APP_DIR
             cd $APP_DIR
-            if [ -d "$APP_DIR/.git" ]; then
+
+            # Verify git and docker are installed
+            if ! command -v git &> /dev/null; then
+              echo "Git is not installed. Installing..."
+              sudo apt-get update
+              sudo apt-get install -y git
+            fi
+
+            if ! command -v docker &> /dev/null; then
+              echo "Docker is not installed. Installing..."
+              sudo apt-get update
+              sudo apt-get install -y docker.io docker-compose
+            fi
+
+            # Clone or update repository
+            if [ -d ".git" ]; then
               echo "Updating existing repository..."
               git pull origin main
             else
               echo "Cloning repository..."
               git clone https://github.com/${{ github.repository }}.git .
             fi
+
+            # Deployment with error handling
             echo "Starting application with Docker Compose..."
-            docker compose down || true
-            docker compose up -d --build
+            docker compose down || echo "No existing containers to stop"
+            docker compose up -d --build || { 
+              echo "Docker Compose deployment failed"; 
+              docker compose logs;
+              exit 1; 
+            }
           EOF
 
   sonar:
