@@ -78,6 +78,11 @@ jobs:
           name: release-notes
           path: release-notes.md
 
+      - name: Check DNS Resolution
+        run: |
+         dig github.com
+         cat /etc/resolv.conf
+
       - name: Debug SSH Setup
         run: |
           set -x  # Enable debug mode
