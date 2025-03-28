@@ -27,60 +27,10 @@ jobs:
           npm init -y
           npm install @octokit/rest
 
-      # ... previous steps ...
-      - name: Generate Release Notes
-        env:
-        GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: |
-         # Create a simple release notes generation script if it doesn't exist
-         cat > .github/workflows/generate-release-note.js << 'EOL'
-         import { Octokit } from '@octokit/rest';
-
-         async function generateReleaseNotes() {
-         const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-
-         try {
-         const { data: releases } = await octokit.repos.listReleases({
-          owner: process.env.GITHUB_REPOSITORY.split('/')[0],
-          repo: process.env.GITHUB_REPOSITORY.split('/')[1]
-         });
-
-         console.log('# Release Notes');
-         console.log(`Generated on: ${new Date().toISOString()}`);
-         console.log('');
-
-         if (releases.length > 0) {
-          releases.slice(0, 5).forEach(release => {
-            console.log(`## ${release.tag_name}`);
-            console.log(`Created at: ${release.created_at}`);
-            console.log(release.body || 'No description');
-            console.log('');
-          });
-         } else {
-           console.log('No previous releases found.');
-         }
-         } catch (error) {
-         console.error('Error generating release notes:', error);
-         process.exit(1);
-         }
-         }
-       
-          function retry(fn, retries = 3) {
-           return fn().catch(err => retries > 1 ? retry(fn, retries - 1) : Promise.reject(err));
-         }
- 
-           retry(generateReleaseNotes);
-          EOL
-
-            node --experimental-modules .github/workflows/generate-release-note.js | tee release-notes.md
-
-# ... remaining steps ...
-
       - name: Generate Release Notes
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          # Create a simple release notes generation script if it doesn't exist
           cat > .github/workflows/generate-release-note.js << 'EOL'
           import { Octokit } from '@octokit/rest';
 
@@ -113,7 +63,11 @@ jobs:
             }
           }
 
-          generateReleaseNotes();
+          function retry(fn, retries = 3) {
+            return fn().catch(err => retries > 1 ? retry(fn, retries - 1) : Promise.reject(err));
+          }
+
+          retry(generateReleaseNotes);
           EOL
 
           node --experimental-modules .github/workflows/generate-release-note.js | tee release-notes.md
@@ -126,14 +80,12 @@ jobs:
 
       - name: Debug SSH Setup
         run: |
-         set -x  # Enable debug mode
-         mkdir -p ~/.ssh
-         echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
-         ls -lah ~/.ssh  # Check if id_rsa was created
-         cat ~/.ssh/id_rsa  # Verify key (remove this after debugging)
-         chmod 600 ~/.ssh/id_rsa
-         ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-         cat ~/.ssh/known_hosts  # Verify known_hosts
+          set -x  # Enable debug mode
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
+          ls -lah ~/.ssh  # Check if id_rsa was created
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy to EC2
         run: |
