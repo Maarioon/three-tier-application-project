@@ -122,4 +122,4 @@ jobs:
           args: >
             -Dsonar.projectKey=SONAR_TOKEN
             -Dsonar.organization=three-tier-application-project
-            -Dsonar.host.url=https://sonarcloud.io/project/overview?id=Maarioon_three-tier-application-project
+            -Dsonar.host.url=https://sonarcloud.io/summary/new_code?id=Maarioon_three-tier-application-project&branch=main
