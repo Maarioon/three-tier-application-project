@@ -20,6 +20,20 @@ jobs:
         with:
           node-version: '18'
 
+      - name: Debug SSH Connection
+        run: |
+          # Explicit DNS configuration
+          sudo bash -c 'echo "nameserver 8.8.8.8" > /etc/resolv.conf'
+          sudo bash -c 'echo "nameserver 1.1.1.1" >> /etc/resolv.conf'
+
+          # SSH Connection Debugging
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          # Verbose SSH debugging
+          ssh -vvv -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} 'hostname && echo "Connection successful"'
+
       - name: Install dependencies
         run: |
           mkdir -p .github/workflows
