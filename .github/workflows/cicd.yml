@@ -25,7 +25,7 @@ jobs:
 
       - name: Generate Release Notes
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           # Execute the ES module script with Node
           node --input-type=module .github/workflows/generate-release-note.js | tee release-notes.md
