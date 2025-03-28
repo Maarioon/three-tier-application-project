@@ -14,112 +14,20 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Ensures full history for PR detection
-          
-      - name: Comprehensive Network Diagnostics
-        run: |
-          # Detailed network troubleshooting
-          echo "Network Interfaces:"
-          ip addr
-          
-          echo -e "\nDNS Configuration:"
-          # Backup original resolv.conf
-          sudo cp /etc/resolv.conf /etc/resolv.conf.backup
-          
-          # Create a new resolv.conf with multiple DNS servers
-          sudo bash -c 'cat > /etc/resolv.conf << EOL
-          nameserver 8.8.8.8
-          nameserver 1.1.1.1
-          nameserver 8.8.4.4
-          options edns0 trust-ad
-          EOL'
-          
-          echo -e "\nUpdated DNS Configuration:"
-          cat /etc/resolv.conf
-          
-          echo -e "\nNetwork Connectivity Tests:"
-          # Extensive connectivity checks
-          echo "Checking internet connectivity..."
-          wget -q --spider https://www.google.com
-          if [ $? -eq 0 ]; then
-            echo "Internet connection: OK"
-          else
-            echo "Internet connection: FAILED"
-          fi
-          
-          echo -e "\nDNS Resolution Tests:"
-          # Multiple DNS resolution attempts
-          for host in github.com google.com microsoft.com; do
-            echo "Resolving $host:"
-            dig +short $host
-            ping -c 4 $host
-          done
-          
-          echo -e "\nNetwork Route Tracing:"
-          traceroute github.com || echo "Traceroute failed"
-          
-          # Restore original resolv.conf if needed
-          sudo mv /etc/resolv.conf.backup /etc/resolv.conf
 
-      # Rest of your workflow remains the same
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-     
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
           
-      - name: Prepare Release Notes Script
-        run: |
-          mkdir -p .github/workflows
-          cat > .github/workflows/generate-release-note.js << 'EOL'
-          import { Octokit } from '@octokit/rest';
-          
-          async function generateReleaseNotes() {
-            const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-            
-            try {
-              const { data: releases } = await octokit.repos.listReleases({
-                owner: process.env.GITHUB_REPOSITORY.split('/')[0],
-                repo: process.env.GITHUB_REPOSITORY.split('/')[1]
-              });
-              
-              console.log('# Release Notes');
-              console.log(`Generated on: ${new Date().toISOString()}`);
-              console.log('');
-              
-              if (releases.length > 0) {
-                releases.slice(0, 5).forEach(release => {
-                  console.log(`## ${release.tag_name}`);
-                  console.log(`Created at: ${release.created_at}`);
-                  console.log(release.body || 'No description');
-                  console.log('');
-                });
-              } else {
-                console.log('No previous releases found.');
-              }
-            } catch (error) {
-              console.error('Error generating release notes:', error);
-              process.exit(1);
-            }
-          }
-          
-          function retry(fn, retries = 3) {
-            return fn().catch(err => retries > 1 ? retry(fn, retries - 1) : Promise.reject(err));
-          }
-          
-          retry(generateReleaseNotes);
-          EOL
-          
       - name: Install dependencies
         run: npm install @octokit/rest
-        
+
       - name: Generate Release Notes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Execute the ES module script with Node
           node --input-type=module .github/workflows/generate-release-note.js | tee release-notes.md
           
       - name: Upload Release Notes as Artifact
@@ -128,34 +36,13 @@ jobs:
           name: release-notes
           path: release-notes.md
           
-      - name: Prepare SSH Connection
+      - name: Set up SSH key
         run: |
-          # Create SSH directory with strict permissions
           mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          
-          # Write SSH private key securely
-          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          
-          # Create SSH config for robust connection
-          cat << EOF > ~/.ssh/config
-          Host ec2-deployment
-            HostName ${{ secrets.EC2_HOST }}
-            User ${{ secrets.EC2_USERNAME }}
-            IdentityFile ~/.ssh/id_rsa
-            StrictHostKeyChecking no
-            UserKnownHostsFile /dev/null
-          EOF
-          
-          # Add host to known hosts
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
           
-      - name: Test SSH Connection
-        run: |
-          # Verbose SSH connection test
-          ssh -vvv -F ~/.ssh/config ec2-deployment 'echo "SSH Connection Test Successful"'
           
       - name: Deploy to EC2
         run: |
