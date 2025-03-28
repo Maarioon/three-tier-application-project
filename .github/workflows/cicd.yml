@@ -1,26 +1,21 @@
 name: Deploy to EC2
-
 on:
   push:
-    branches:
+    branches: 
       - main
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Ensures full history for PR detection
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - name: Comprehensive Network Diagnostics
+          
+      - name: Network Diagnostics
         run: |
           # Network and DNS debugging
           echo "Network Interfaces:"
@@ -37,51 +32,18 @@ jobs:
           dig github.com
           ping -c 4 github.com
           ping -c 4 ${{ secrets.EC2_HOST }}
-
-      - name: Prepare SSH Connection
-        env:
-          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
-        run: |
-          # Create SSH directory with strict permissions
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-
-          # Write SSH private key securely
-          echo "$EC2_SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-
-          # Create SSH config for robust connection
-          cat << EOF > ~/.ssh/config
-          Host ec2-deployment
-            HostName $EC2_HOST
-            User $EC2_USERNAME
-            IdentityFile ~/.ssh/id_rsa
-            StrictHostKeyChecking no
-            UserKnownHostsFile /dev/null
-          EOF
-
-          # Add host to known hosts
-          ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
-
-          # Test SSH connection with verbose output
-          ssh -vvv -F ~/.ssh/config ec2-deployment 'echo "SSH Connection Test Successful"'
-
-      - name: Install Dependencies
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Prepare Release Notes Script
         run: |
           mkdir -p .github/workflows
-          touch .github/workflows/generate-release-note.js
-          npm init -y
-          npm install @octokit/rest
-
-      - name: Generate Release Notes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: |
           cat > .github/workflows/generate-release-note.js << 'EOL'
           import { Octokit } from '@octokit/rest';
+          
           async function generateReleaseNotes() {
             const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
             
@@ -90,9 +52,11 @@ jobs:
                 owner: process.env.GITHUB_REPOSITORY.split('/')[0],
                 repo: process.env.GITHUB_REPOSITORY.split('/')[1]
               });
+              
               console.log('# Release Notes');
               console.log(`Generated on: ${new Date().toISOString()}`);
               console.log('');
+              
               if (releases.length > 0) {
                 releases.slice(0, 5).forEach(release => {
                   console.log(`## ${release.tag_name}`);
@@ -108,41 +72,79 @@ jobs:
               process.exit(1);
             }
           }
+          
           function retry(fn, retries = 3) {
             return fn().catch(err => retries > 1 ? retry(fn, retries - 1) : Promise.reject(err));
           }
+          
           retry(generateReleaseNotes);
           EOL
-          node --experimental-modules .github/workflows/generate-release-note.js | tee release-notes.md
-
+          
+      - name: Install dependencies
+        run: npm install @octokit/rest
+        
+      - name: Generate Release Notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node --input-type=module .github/workflows/generate-release-note.js | tee release-notes.md
+          
       - name: Upload Release Notes as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: release-notes
           path: release-notes.md
-
+          
+      - name: Prepare SSH Connection
+        run: |
+          # Create SSH directory with strict permissions
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          
+          # Write SSH private key securely
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          
+          # Create SSH config for robust connection
+          cat << EOF > ~/.ssh/config
+          Host ec2-deployment
+            HostName ${{ secrets.EC2_HOST }}
+            User ${{ secrets.EC2_USERNAME }}
+            IdentityFile ~/.ssh/id_rsa
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+          EOF
+          
+          # Add host to known hosts
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          
+      - name: Test SSH Connection
+        run: |
+          # Verbose SSH connection test
+          ssh -vvv -F ~/.ssh/config ec2-deployment 'echo "SSH Connection Test Successful"'
+          
       - name: Deploy to EC2
         run: |
-          # Deployment with advanced error handling
           ssh -F ~/.ssh/config ec2-deployment << 'EOF'
             # Create application directory
             APP_DIR="/home/${{ secrets.EC2_USERNAME }}/myapp"
             mkdir -p $APP_DIR
             cd $APP_DIR
-
+            
             # Verify git and docker are installed
             if ! command -v git &> /dev/null; then
               echo "Git is not installed. Installing..."
               sudo apt-get update
               sudo apt-get install -y git
             fi
-
+            
             if ! command -v docker &> /dev/null; then
               echo "Docker is not installed. Installing..."
               sudo apt-get update
               sudo apt-get install -y docker.io docker-compose
             fi
-
+            
             # Clone or update repository
             if [ -d ".git" ]; then
               echo "Updating existing repository..."
@@ -151,7 +153,7 @@ jobs:
               echo "Cloning repository..."
               git clone https://github.com/${{ github.repository }}.git .
             fi
-
+            
             # Deployment with error handling
             echo "Starting application with Docker Compose..."
             docker compose down || echo "No existing containers to stop"
