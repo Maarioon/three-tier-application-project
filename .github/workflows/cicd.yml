@@ -15,24 +15,57 @@ jobs:
         with:
           fetch-depth: 0  # Ensures full history for PR detection
           
-      - name: Network Diagnostics
+      - name: Comprehensive Network Diagnostics
         run: |
-          # Network and DNS debugging
+          # Detailed network troubleshooting
           echo "Network Interfaces:"
           ip addr
           
-          echo "DNS Configuration:"
+          echo -e "\nDNS Configuration:"
+          # Backup original resolv.conf
+          sudo cp /etc/resolv.conf /etc/resolv.conf.backup
+          
+          # Create a new resolv.conf with multiple DNS servers
+          sudo bash -c 'cat > /etc/resolv.conf << EOL
+          nameserver 8.8.8.8
+          nameserver 1.1.1.1
+          nameserver 8.8.4.4
+          options edns0 trust-ad
+          EOL'
+          
+          echo -e "\nUpdated DNS Configuration:"
           cat /etc/resolv.conf
           
-          echo "Adding Google and Cloudflare DNS:"
-          sudo bash -c 'echo "nameserver 8.8.8.8" > /etc/resolv.conf'
-          sudo bash -c 'echo "nameserver 1.1.1.1" >> /etc/resolv.conf'
+          echo -e "\nNetwork Connectivity Tests:"
+          # Extensive connectivity checks
+          echo "Checking internet connectivity..."
+          wget -q --spider https://www.google.com
+          if [ $? -eq 0 ]; then
+            echo "Internet connection: OK"
+          else
+            echo "Internet connection: FAILED"
+          fi
           
-          echo "DNS Resolution Tests:"
-          dig github.com
-          ping -c 4 github.com
-          ping -c 4 ${{ secrets.EC2_HOST }}
+          echo -e "\nDNS Resolution Tests:"
+          # Multiple DNS resolution attempts
+          for host in github.com google.com microsoft.com; do
+            echo "Resolving $host:"
+            dig +short $host
+            ping -c 4 $host
+          done
           
+          echo -e "\nNetwork Route Tracing:"
+          traceroute github.com || echo "Traceroute failed"
+          
+          # Restore original resolv.conf if needed
+          sudo mv /etc/resolv.conf.backup /etc/resolv.conf
+
+      # Rest of your workflow remains the same
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+     
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
