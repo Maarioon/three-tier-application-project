@@ -134,10 +134,12 @@ jobs:
             else
               echo "Cloning repository..."
               git clone https://github.com/${{ github.repository }}.git .
+              
             fi
             
             # Deployment with error handling
             echo "Starting application with Docker Compose..."
+            cd three-tier-application-project/
             docker compose down || echo "No existing containers to stop"
             docker compose up -d --build || { 
               echo "Docker Compose deployment failed"; 
