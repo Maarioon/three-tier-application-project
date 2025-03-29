@@ -108,7 +108,7 @@ jobs:
           
       - name: Deploy to EC2
         run: |
-          ssh -F ~/.ssh/config ec2-deployment << 'EOF'
+          ssh -F ~/.ssh/id_rsa << 'EOF'
             # Create application directory
             APP_DIR="/home/${{ secrets.EC2_USERNAME }}/myapp"
             mkdir -p $APP_DIR
