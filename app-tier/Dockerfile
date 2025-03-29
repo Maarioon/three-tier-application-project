@@ -21,4 +21,4 @@ EXPOSE 4000
 
 # Run the application with the start script
 CMD ["npm", "start"]
-~                                                                                                                                                               ~                                                                                                                                                               ~                                   
+                                                                                                                                                             ~                                                                                                                                                               ~                                   
