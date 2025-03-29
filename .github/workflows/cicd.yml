@@ -76,7 +76,7 @@ jobs:
       - name: Test SSH Connection
         run: ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@54.172.92.73 "echo 'Connected successfully!'"
           
-       # ✅ Step 1: Set Up SSH Key
+      # ✅ Step 1: Set Up SSH Key
       - name: Configure SSH Key
         run: |
           mkdir -p ~/.ssh
@@ -105,41 +105,40 @@ jobs:
       - name: Test SSH Connection
         run: ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_HOST }} "echo 'Connected successfully!'"
           
-          
       - name: Deploy to EC2
         run: |
           ssh -i ~/.ssh/id_rsa ubuntu@54.172.92.73 '
             # Install git and docker if missing
             command -v git &> /dev/null || {
-            echo "Installing git..."
-            sudo apt-get update && sudo apt-get install -y git
-           }
+              echo "Installing git..."
+              sudo apt-get update && sudo apt-get install -y git
+            }
   
-          command -v docker &> /dev/null || {
-          echo "Installing docker..."
-          sudo apt-get update && sudo apt-get install -y docker.io docker-compose
-          }
+            command -v docker &> /dev/null || {
+              echo "Installing docker..."
+              sudo apt-get update && sudo apt-get install -y docker.io docker-compose
+            }
   
-          # Clone or update repository
-          if [ -d ".git" ]; then
-          echo "Updating repository..."
-          git pull origin main
-          else
-          echo "Cloning repository..."
-          git clone https://github.com/Maarioon/three-tier-application-project .
-          fi
+            # Clone or update repository
+            if [ -d ".git" ]; then
+              echo "Updating repository..."
+              git pull origin main
+            else
+              echo "Cloning repository..."
+              git clone https://github.com/Maarioon/three-tier-application-project .
+            fi
   
-          # Deploy application
-          cd three-tier-application-project/
-          docker compose down || echo "No containers to stop"
-          docker compose up -d --build || {
-          echo "Deployment failed"
-          docker compose logs
-          exit 1
-          }
-    '
-    
-    sonar:
+            # Deploy application
+            cd three-tier-application-project/
+            docker compose down || echo "No containers to stop"
+            docker compose up -d --build || {
+              echo "Deployment failed"
+              docker compose logs
+              exit 1
+            }
+          '
+  
+  sonar:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
