@@ -74,7 +74,7 @@ jobs:
           ssh-keyscan -H 54.172.92.73 >> ~/.ssh/known_hosts
 
       - name: Test SSH Connection
-        run: ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa user@54.172.92.73 "echo 'Connected successfully!'"
+        run: ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@54.172.92.73 "echo 'Connected successfully!'"
           
        # ✅ Step 1: Set Up SSH Key
       - name: Configure SSH Key
