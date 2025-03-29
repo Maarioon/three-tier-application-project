@@ -137,9 +137,9 @@ jobs:
           docker compose logs
           exit 1
           }
-   '
-   
-  sonar:
+    '
+    
+    sonar:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
