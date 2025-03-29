@@ -35,6 +35,38 @@ jobs:
         with:
           name: release-notes
           path: release-notes.md
+
+      # Debug: Check internet connectivity
+      - name: Check Internet Connectivity
+        run: |
+          ping -c 4 google.com || echo "Ping failed"
+          curl -Is https://github.com || echo "GitHub unreachable"
+          nslookup github.com || echo "DNS resolution failed"
+
+      # Fix DNS resolution issue
+      - name: Fix DNS Configuration
+        run: |
+          echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf > /dev/null
+          echo "nameserver 1.1.1.1" | sudo tee -a /etc/resolv.conf > /dev/null
+
+      # Ensure network is stable
+      - name: Wait for Network to Stabilize
+        run: sleep 10
+
+      # Check if hostname is resolvable
+      - name: Test Hostname Resolution
+        run: nslookup ${{ secrets.EC2_HOST }} || echo "Hostname resolution failed"
+
+      # Setup SSH directory
+      - name: Setup SSH Directory
+        run: mkdir -p ~/.ssh
+
+      # Deploy or Run Commands (example SSH)
+      - name: Deploy via SSH
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_HOST }} "echo 'Connected successfully!'"
+🔹 How It Works:
+      
           
       - name: Set up SSH key
         run: |
