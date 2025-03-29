@@ -129,14 +129,24 @@ jobs:
             fi
   
             # Deploy application
-            cd three-tier-application-project/
-            docker compose down || echo "No containers to stop"
-            docker compose up -d --build || {
-              echo "Deployment failed"
-              docker compose logs
-              exit 1
-            }
+          #   cd three-tier-application-project/
+          #   docker compose down || echo "No containers to stop"
+          #   docker compose up -d --build || {
+          #     echo "Deployment failed"
+          #     docker compose logs
+          #     exit 1
+          #   }
+          # '
+
+          ssh -i ~/.ssh/id_rsa ubuntu@*** '
+          cd three-tier-application-project || git clone https://github.com/Maarioon/three-tier-application-project.git
+          cd three-tier-application-project
+          git pull origin main
+
+          echo "Starting deployment..."
+          docker compose up -d --build
           '
+
   
   sonar:
     runs-on: ubuntu-latest
