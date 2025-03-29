@@ -107,17 +107,17 @@ jobs:
           
       - name: Deploy to EC2
         run: |
-          ssh -i ~/.ssh/id_rsa ubuntu@54.172.92.73 '
-            # Install git and docker if missing
-            command -v git &> /dev/null || {
-              echo "Installing git..."
-              sudo apt-get update && sudo apt-get install -y git
-            }
+          # ssh -i ~/.ssh/id_rsa ubuntu@54.172.92.73 '
+          #   # Install git and docker if missing
+          #   command -v git &> /dev/null || {
+          #     echo "Installing git..."
+          #     sudo apt-get update && sudo apt-get install -y git
+          #   }
   
-            command -v docker &> /dev/null || {
-              echo "Installing docker..."
-              sudo apt-get update && sudo apt-get install -y docker.io docker-compose
-            }
+          #   command -v docker &> /dev/null || {
+          #     echo "Installing docker..."
+          #     sudo apt-get update && sudo apt-get install -y docker.io docker-compose
+          #   }
   
             # Clone or update repository
             # if [ -d ".git" ]; then
@@ -138,6 +138,33 @@ jobs:
           #   }
           # '
 
+      - name: Deploy to EC2
+        run: |
+         ssh -i ~/.ssh/id_rsa ubuntu@54.172.92.73 << 'EOF'
+         # Ensure git and docker are installed
+         command -v git &> /dev/null || {
+          echo "Installing git..."
+          sudo apt-get update && sudo apt-get install -y git
+         }
+
+         command -v docker &> /dev/null || {
+         echo "Installing docker..."
+         sudo apt-get update && sudo apt-get install -y docker.io docker-compose
+         }
+
+         # Remove existing directory if it exists
+         [ -d "three-tier-application-project" ] && rm -rf "three-tier-application-project"
+
+         # Clone repository fresh
+         # git clone https://github.com/Maarioon/three-tier-application-project.git
+
+         # # Navigate into project directory
+         # cd three-tier-application-project
+
+         # # Start deployment
+         # echo "Starting deployment..."
+         # docker compose up -d --build
+    
          
           cd three-tier-application-project || git clone https://github.com/Maarioon/three-tier-application-project.git
           cd three-tier-application-project
@@ -145,7 +172,7 @@ jobs:
 
           echo "Starting deployment..."
           docker compose up -d --build
-          '
+          EOF
 
   
   sonar:
