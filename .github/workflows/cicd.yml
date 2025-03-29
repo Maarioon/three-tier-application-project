@@ -108,7 +108,7 @@ jobs:
           
       - name: Deploy to EC2
         run: |
-          ssh -F ~/.ssh/id_rsa << 'EOF'
+          ssh -i ~/.ssh/id_rsa ubuntu@54.172.92.73 '
             # Create application directory
             APP_DIR="/home/${{ secrets.EC2_USERNAME }}/myapp"
             mkdir -p $APP_DIR
@@ -144,7 +144,7 @@ jobs:
               docker compose logs;
               exit 1; 
             }
-          EOF
+          '
 
 
   sonar:
