@@ -138,7 +138,7 @@ jobs:
           #   }
           # '
 
-          ssh -i ~/.ssh/id_rsa ubuntu@*** '
+         
           cd three-tier-application-project || git clone https://github.com/Maarioon/three-tier-application-project.git
           cd three-tier-application-project
           git pull origin main
