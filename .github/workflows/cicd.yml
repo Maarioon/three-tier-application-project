@@ -58,14 +58,23 @@ jobs:
         run: nslookup ${{ secrets.EC2_HOST }} || echo "Hostname resolution failed"
 
       # Setup SSH directory
-      - name: Setup SSH Directory
-        run: mkdir -p ~/.ssh
+      # - name: Setup SSH Directory
+      #   run: mkdir -p ~/.ssh
 
-      # Deploy or Run Commands (example SSH)
-      - name: Deploy via SSH
+      # # Deploy or Run Commands (example SSH)
+      # - name: Deploy via SSH
+      #   run: |
+      #     ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_HOST }} "echo 'Connected successfully!'"
+
+      - name: Set up SSH Key
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_HOST }} "echo 'Connected successfully!'"
-      
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 54.172.92.73 >> ~/.ssh/known_hosts
+
+      - name: Test SSH Connection
+        run: ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa user@54.172.92.73 "echo 'Connected successfully!'"
           
        # ✅ Step 1: Set Up SSH Key
       - name: Configure SSH Key
