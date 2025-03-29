@@ -120,13 +120,13 @@ jobs:
             }
   
             # Clone or update repository
-            if [ -d ".git" ]; then
-              echo "Updating repository..."
-              git pull origin main
-            else
-              echo "Cloning repository..."
-              git clone https://github.com/Maarioon/three-tier-application-project .
-            fi
+            # if [ -d ".git" ]; then
+            #   echo "Updating repository..."
+            #   git pull origin main
+            # else
+            #   echo "Cloning repository..."
+            #   git clone https://github.com/Maarioon/three-tier-application-project .
+            # fi
   
             # Deploy application
           #   cd three-tier-application-project/
