@@ -1,14 +1,14 @@
 name: Deploy to EC2
-
 on:
   push:
-    branches:
+    branches: 
       - main
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -19,92 +19,125 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-
+          
       - name: Install dependencies
-        run: |
-          mkdir -p .github/workflows
-          touch .github/workflows/generate-release-note.js
-          npm init -y
-          npm install @octokit/rest
+        run: npm install @octokit/rest
 
       - name: Generate Release Notes
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          # Create a simple release notes generation script if it doesn't exist
-          cat > .github/workflows/generate-release-note.js << 'EOL'
-          import { Octokit } from '@octokit/rest';
-
-          async function generateReleaseNotes() {
-            const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-            
-            try {
-              const { data: releases } = await octokit.repos.listReleases({
-                owner: process.env.GITHUB_REPOSITORY.split('/')[0],
-                repo: process.env.GITHUB_REPOSITORY.split('/')[1]
-              });
-
-              console.log('# Release Notes');
-              console.log(`Generated on: ${new Date().toISOString()}`);
-              console.log('');
-
-              if (releases.length > 0) {
-                releases.slice(0, 5).forEach(release => {
-                  console.log(`## ${release.tag_name}`);
-                  console.log(`Created at: ${release.created_at}`);
-                  console.log(release.body || 'No description');
-                  console.log('');
-                });
-              } else {
-                console.log('No previous releases found.');
-              }
-            } catch (error) {
-              console.error('Error generating release notes:', error);
-              process.exit(1);
-            }
-          }
-
-          generateReleaseNotes();
-          EOL
-
-          node --experimental-modules .github/workflows/generate-release-note.js | tee release-notes.md
-
+          # Execute the ES module script with Node
+          node --input-type=module .github/workflows/generate-release-note.js | tee release-notes.md
+          
       - name: Upload Release Notes as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: release-notes
           path: release-notes.md
 
-      - name: Debug SSH Setup
+      # Debug: Check internet connectivity
+      - name: Check Internet Connectivity
         run: |
-         set -x  # Enable debug mode
-         mkdir -p ~/.ssh
-         echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
-         ls -lah ~/.ssh  # Check if id_rsa was created
-         cat ~/.ssh/id_rsa  # Verify key (remove this after debugging)
-         chmod 600 ~/.ssh/id_rsa
-         ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-         cat ~/.ssh/known_hosts  # Verify known_hosts
+          ping -c 4 google.com || echo "Ping failed"
+          curl -Is https://github.com || echo "GitHub unreachable"
+          nslookup github.com || echo "DNS resolution failed"
 
-      
+      # Fix DNS resolution issue
+      - name: Fix DNS Configuration
+        run: |
+          echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf > /dev/null
+          echo "nameserver 1.1.1.1" | sudo tee -a /etc/resolv.conf > /dev/null
+
+      # Ensure network is stable
+      - name: Wait for Network to Stabilize
+        run: sleep 10
+
+      # Check if hostname is resolvable
+      - name: Test Hostname Resolution
+        run: nslookup ${{ secrets.EC2_HOST }} || echo "Hostname resolution failed"
+
+      # Setup SSH directory
+      # - name: Setup SSH Directory
+      #   run: mkdir -p ~/.ssh
+
+      # # Deploy or Run Commands (example SSH)
+      # - name: Deploy via SSH
+      #   run: |
+      #     ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_HOST }} "echo 'Connected successfully!'"
+
+      - name: Set up SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 54.172.92.73 >> ~/.ssh/known_hosts
+
+      - name: Test SSH Connection
+        run: ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@54.172.92.73 "echo 'Connected successfully!'"
+          
+      # ✅ Step 1: Set Up SSH Key
+      - name: Configure SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          eval $(ssh-agent)
+          ssh-add ~/.ssh/id_rsa
+
+      # ✅ Step 2: Add Remote Server to Known Hosts
+      - name: Add Known Hosts
+        run: ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      # ✅ Step 3: Debug SSH Key (Check if the Key is Correctly Stored)
+      - name: Debug SSH Key
+        run: ls -lah ~/.ssh && cat ~/.ssh/id_rsa | head -n 3
+
+      # ✅ Step 4: Test Hostname Resolution
+      - name: Test Hostname Resolution
+        run: nslookup ${{ secrets.EC2_HOST }} || echo "Hostname resolution failed"
+
+      # ✅ Step 5: Test Server Connectivity
+      - name: Test Server Connectivity (Ping)
+        run: ping -c 4 ${{ secrets.EC2_HOST }} || echo "Ping failed"
+
+      # ✅ Step 6: Test SSH Connection
+      - name: Test SSH Connection
+        run: ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_HOST }} "echo 'Connected successfully!'"
+          
       - name: Deploy to EC2
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
-            APP_DIR="/home/${{ secrets.EC2_USERNAME }}/myapp"
-            mkdir -p $APP_DIR
-            cd $APP_DIR
-            if [ -d "$APP_DIR/.git" ]; then
-              echo "Updating existing repository..."
+          ssh -i ~/.ssh/id_rsa ubuntu@54.172.92.73 '
+            # Install git and docker if missing
+            command -v git &> /dev/null || {
+              echo "Installing git..."
+              sudo apt-get update && sudo apt-get install -y git
+            }
+  
+            command -v docker &> /dev/null || {
+              echo "Installing docker..."
+              sudo apt-get update && sudo apt-get install -y docker.io docker-compose
+            }
+  
+            # Clone or update repository
+            if [ -d ".git" ]; then
+              echo "Updating repository..."
               git pull origin main
             else
               echo "Cloning repository..."
-              git clone https://github.com/${{ github.repository }}.git .
+              git clone https://github.com/Maarioon/three-tier-application-project .
             fi
-            echo "Starting application with Docker Compose..."
-            docker compose down || true
-            docker compose up -d --build
-          EOF
-
+  
+            # Deploy application
+            cd three-tier-application-project/
+            docker compose down || echo "No containers to stop"
+            docker compose up -d --build || {
+              echo "Deployment failed"
+              docker compose logs
+              exit 1
+            }
+          '
+  
   sonar:
     runs-on: ubuntu-latest
     steps:
@@ -116,10 +149,10 @@ jobs:
       - name: SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@master
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           projectBaseDir: .
           args: >
-            -Dsonar.projectKey=three-tier-app
+            -Dsonar.projectKey=SONAR_TOKEN
             -Dsonar.organization=three-tier-application-project
-            -Dsonar.host.url=https://sonarcloud.io
+            -Dsonar.host.url=https://sonarcloud.io/summary/new_code?id=Maarioon_three-tier-application-project&branch=main
